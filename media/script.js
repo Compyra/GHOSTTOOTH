@@ -192,13 +192,23 @@ const WATCHDOG_DELAY_MS = 10000;
 /** Currently active BluetoothLEScan (from requestLEScan), or null. */
 let activeScan = null;
 
-/** Local scanner bridge (bt-bridge.py) — native BLE scan exposed on localhost. */
+/**
+ * WebSocket URL for the local bridge.
+ * Chrome 130+ blocks fetch() from https:// to loopback (Private Network Access),
+ * but does not yet enforce that restriction for WebSocket connections.
+ */
+const BRIDGE_WS_URL = 'ws://127.0.0.1:8437';
+
+/** HTTP fallback URL for the local bridge (used when WebSocket is unavailable). */
 const BRIDGE_URL = 'http://127.0.0.1:8437';
 
-/** Poll interval for the local bridge (ms). */
+/** Poll interval for the HTTP fallback (ms). */
 const BRIDGE_POLL_MS = 2000;
 
-/** Timer handle for bridge polling, or null when bridge mode is inactive. */
+/** Active WebSocket connection to the bridge, or null. */
+let bridgeWs = null;
+
+/** Timer handle for HTTP-fallback polling, or null when bridge mode is inactive. */
 let bridgeTimer = null;
 
 /** Set of device objects being watched via watchAdvertisements(). */
@@ -1088,10 +1098,16 @@ async function startScan() {
 
 /** Stop the active passive scan. */
 function stopScan() {
-    const wasActive = activeScan !== null || watchedDevices.size > 0 || bridgeTimer !== null;
+    const wasActive = activeScan !== null || watchedDevices.size > 0 || bridgeTimer !== null || bridgeWs !== null;
 
     clearTimeout(scanWatchdog);
     scanWatchdog = null;
+
+    if (bridgeWs !== null) {
+        bridgeWs.onclose = null; // suppress disconnect notice — this is an intentional stop
+        bridgeWs.close();
+        bridgeWs = null;
+    }
 
     if (bridgeTimer !== null) {
         clearInterval(bridgeTimer);
@@ -1126,7 +1142,7 @@ function stopWatchingDevices() {
 // Local Scanner Bridge (bt-bridge.py)
 // ================================================================
 
-/** Fetch the device list from the local bridge. Throws on failure. */
+/** Fetch the device list from the local bridge via HTTP. Throws on failure. */
 async function fetchBridgeDevices() {
     const res = await fetch(`${BRIDGE_URL}/api/devices`, { signal: AbortSignal.timeout(1500) });
     if (!res.ok) throw new Error(`Bridge HTTP ${res.status}`);
@@ -1135,15 +1151,74 @@ async function fetchBridgeDevices() {
 }
 
 /**
- * Try to connect to the local scanner bridge and start polling.
+ * Try to connect to the bridge via WebSocket (bypasses Chrome PNA loopback block).
+ * The bridge pushes a full device list every 2 seconds.
+ * @returns {Promise<boolean>} true if WebSocket mode started successfully.
+ */
+function startBridgeWsScan() {
+    return new Promise((resolve) => {
+        let started = false;
+        let ws;
+        try { ws = new WebSocket(BRIDGE_WS_URL); } catch (_) { resolve(false); return; }
+
+        const timeout = setTimeout(() => {
+            if (!started) {
+                ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
+                ws.close();
+                resolve(false);
+            }
+        }, 2000);
+
+        ws.onmessage = (ev) => {
+            let data;
+            try { data = JSON.parse(ev.data); } catch (_) { return; }
+            const list = Array.isArray(data.devices) ? data.devices : [];
+            processBridgeDevices(list);
+            if (!started) {
+                started = true;
+                clearTimeout(timeout);
+                bridgeWs = ws;
+                setStatus('SCANNING (BRIDGE)', 'scanning');
+                showNotice('info',
+                    'Connected to the local scanner bridge — live native BLE scan active. ' +
+                    'All nearby advertising devices will appear below. Click [ STOP SCAN ] when done.');
+                document.getElementById('btn-stop').disabled = false;
+                resolve(true);
+            }
+        };
+
+        ws.onerror = () => { if (!started) { clearTimeout(timeout); resolve(false); } };
+
+        ws.onclose = () => {
+            if (!started) {
+                clearTimeout(timeout);
+                resolve(false);
+            } else if (bridgeWs !== null) {
+                // Unexpected disconnect (bridge crashed / stopped)
+                bridgeWs = null;
+                stopScan();
+                setStatus('BRIDGE LOST', 'error');
+                showNotice('error', 'Lost connection to the local scanner bridge. Restart "python bt-bridge.py" and scan again.');
+            }
+        };
+    });
+}
+
+/**
+ * Try to connect to the local scanner bridge.
+ * Prefers WebSocket (avoids Chrome Private Network Access loopback block),
+ * falls back to HTTP polling for environments where WebSocket is unavailable.
  * @returns {Promise<boolean>} true if bridge mode started.
  */
 async function startBridgeScan() {
+    if (await startBridgeWsScan()) return true;
+
+    // HTTP fallback (localhost testing, older setups)
     let list;
     try {
         list = await fetchBridgeDevices();
     } catch (_) {
-        return false; // bridge not running — caller falls back to Web Bluetooth
+        return false;
     }
 
     processBridgeDevices(list);

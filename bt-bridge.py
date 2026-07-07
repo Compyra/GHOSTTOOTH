@@ -6,13 +6,18 @@ Observation of Operational Tracker Hardware)
 Chromium's Web Bluetooth passive scanning (requestLEScan) does not start
 radio discovery on Windows. This bridge performs the native BLE scan
 (same Windows WinRT APIs, via bleak) and exposes the results as JSON on
-http://127.0.0.1:8437/api/devices so the webpage can display them live.
+ws://127.0.0.1:8437.
+
+Why WebSocket instead of HTTP?
+Chrome 130+ blocks fetch() from public https:// origins to loopback
+addresses (Private Network Access policy) before even checking CORS
+headers. WebSocket connections are not subject to that restriction yet.
 
 Usage:
-    pip install bleak
+    pip install bleak websockets
     python bt-bridge.py
 
-Then open the BT Scanner webpage and click [ START SCAN ] — it connects
+Then open the GHOSTTOOTH webpage and click [ START SCAN ] — it connects
 to this bridge automatically.
 
 Security: binds to 127.0.0.1 only (never exposed to the network).
@@ -22,9 +27,15 @@ import asyncio
 import json
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from bleak import BleakScanner
+
+try:
+    from websockets.asyncio.server import serve
+    from websockets.http11 import Response
+    from websockets.datastructures import Headers
+except ImportError:
+    raise SystemExit("Install the required library: pip install websockets")
 
 PORT = 8437
 STALE_AFTER_S = 900         # drop devices not seen for this long (page owns staleness UX)
@@ -33,6 +44,22 @@ PRUNE_INTERVAL_S = 5
 devices = {}
 lock = threading.Lock()
 
+# CORS + Chrome Private Network Access headers
+_CORS = [
+    ("Access-Control-Allow-Origin", "*"),
+    ("Access-Control-Allow-Methods", "GET, OPTIONS"),
+    ("Access-Control-Allow-Headers", "*"),
+    ("Access-Control-Allow-Private-Network", "true"),
+    ("Cache-Control", "no-store"),
+]
+
+
+def _http_response(status, reason, extra=(), body=b""):
+    headers = Headers([*_CORS, ("Content-Length", str(len(body))), *extra])
+    return Response(status, reason, headers, body)
+
+
+# ---- BLE scanner -----------------------------------------------------------
 
 def on_advertisement(device, adv):
     with lock:
@@ -47,53 +74,63 @@ def on_advertisement(device, adv):
         }
 
 
-async def scan_loop():
-    scanner = BleakScanner(on_advertisement)
-    await scanner.start()
-    print(f"GHOSTTOOTH BLE scan running. Bridge serving on http://127.0.0.1:{PORT}")
-    print("Open the GHOSTTOOTH webpage and click [ START SCAN ]. Ctrl+C to quit.")
-    while True:
-        await asyncio.sleep(PRUNE_INTERVAL_S)
-        cutoff = time.time() - STALE_AFTER_S
+# ---- WebSocket server ------------------------------------------------------
+
+async def process_request(connection, request):
+    """Handle plain HTTP requests that arrive on the WebSocket port."""
+    if request.method == "OPTIONS":
+        return _http_response(204, "No Content")
+
+    if not request.headers.get("Upgrade"):
+        # Plain HTTP GET — return device list for backward compatibility
         with lock:
-            for addr in [a for a, d in devices.items() if d["last_seen"] < cutoff]:
-                del devices[addr]
+            body = json.dumps({"devices": list(devices.values())}).encode()
+        return _http_response(200, "OK", [("Content-Type", "application/json")], body)
+
+    return None  # proceed with WebSocket upgrade
 
 
-class Handler(BaseHTTPRequestHandler):
-    def _send_headers(self, code=200, ctype="application/json"):
-        self.send_response(code)
-        self.send_header("Content-Type", ctype)
-        # CORS + Chrome Private Network Access, so https pages may call localhost
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "*")
-        self.send_header("Access-Control-Allow-Private-Network", "true")
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-
-    def do_OPTIONS(self):
-        self._send_headers(204)
-
-    def do_GET(self):
-        if self.path == "/api/devices":
+async def ws_handler(ws):
+    """Push the full device list to a connected client every 2 seconds."""
+    try:
+        while True:
             with lock:
                 payload = json.dumps({"devices": list(devices.values())})
-            self._send_headers()
-            self.wfile.write(payload.encode("utf-8"))
-        else:
-            self._send_headers(200, "text/plain; charset=utf-8")
-            self.wfile.write(b"GHOSTTOOTH bridge running. Endpoint: /api/devices\n")
+            await ws.send(payload)
+            await asyncio.sleep(2)
+    except Exception:
+        pass
 
-    def log_message(self, *args):
-        pass  # keep the console quiet
+
+# ---- Main ------------------------------------------------------------------
+
+async def run():
+    scanner = BleakScanner(on_advertisement)
+    await scanner.start()
+    print(f"GHOSTTOOTH BLE scan running. Bridge on ws://127.0.0.1:{PORT}")
+    print("Open the GHOSTTOOTH webpage and click [ START SCAN ]. Ctrl+C to quit.")
+
+    # Browsers do not enforce CORS/Private Network Access on the WebSocket
+    # handshake response the way they do for fetch(), so no extra headers
+    # are needed here for the upgrade itself (process_request still adds
+    # them for the plain-HTTP fallback path).
+    async with serve(
+        ws_handler,
+        "127.0.0.1",
+        PORT,
+        process_request=process_request,
+    ):
+        while True:
+            await asyncio.sleep(PRUNE_INTERVAL_S)
+            cutoff = time.time() - STALE_AFTER_S
+            with lock:
+                for addr in [a for a, d in devices.items() if d["last_seen"] < cutoff]:
+                    del devices[addr]
 
 
 def main():
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        asyncio.run(scan_loop())
+        asyncio.run(run())
     except KeyboardInterrupt:
         print("\nBridge stopped.")
 
