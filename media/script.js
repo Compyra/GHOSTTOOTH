@@ -10,7 +10,7 @@
    https://github.com/yjeanrenaud/yj_nearbyglasses
    Manufacturer IDs from Bluetooth SIG Assigned Numbers:
    https://www.bluetooth.com/specifications/assigned-numbers/
-   Full company-identifier registry (company_identifiers.yaml):
+   Full company-identifier registry (media/company_identifiers.js), generated from:
    https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/company_identifiers/company_identifiers.yaml
    For the long_company_identifiers.js file, source: https://gist.githubusercontent.com/ariccio/2882a435c79da28ba6035a14c5c65f22/raw/775e70cbc17b37fb1961b581b514f55296947338/BluetoothConstants.ts
    ============================================================ */
@@ -105,42 +105,11 @@ const TRACKER_SERVICE_UUIDS = new Set([
 
 /**
  * Full Bluetooth SIG company-identifier registry (numeric ID -> name),
- * loaded at startup from company_identifiers.yaml.
- * Source: https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/company_identifiers/company_identifiers.yaml
+ * loaded from company_identifiers.js (COMPANY_IDENTIFIERS), which is
+ * generated from the SIG registry:
+ * https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/company_identifiers/company_identifiers.yaml
  */
-const companyNames = new Map();
-
-/**
- * Load and parse company_identifiers.yaml. The file is a strictly regular
- * list of `- value: 0x....` / `name: '...'` pairs, so a purpose-built
- * parser is used instead of shipping a YAML library.
- * Fails silently (file:// pages, offline) — the curated lists remain as fallback.
- */
-async function loadCompanyIdentifiers() {
-    try {
-        const res = await fetch('media/company_identifiers.yaml');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = await res.text();
-
-        let pendingId = null;
-        for (const line of text.split('\n')) {
-            const value = line.match(/^\s*-\s*value:\s*0[xX]([0-9A-Fa-f]+)\s*$/);
-            if (value) {
-                pendingId = parseInt(value[1], 16);
-                continue;
-            }
-            const name = line.match(/^\s*name:\s*(.+?)\s*$/);
-            if (name && pendingId !== null) {
-                let n = name[1];
-                if ((n.startsWith("'") && n.endsWith("'")) || (n.startsWith('"') && n.endsWith('"'))) {
-                    n = n.slice(1, -1).replace(/''/g, "'");
-                }
-                companyNames.set(pendingId, n);
-                pendingId = null;
-            }
-        }
-    } catch (_) { /* keep curated fallback lists */ }
-}
+const companyNames = typeof COMPANY_IDENTIFIERS !== 'undefined' ? COMPANY_IDENTIFIERS : new Map();
 
 /** Best-known name for a company ID: full SIG registry, then curated lists. */
 function companyName(companyId) {
@@ -1402,7 +1371,6 @@ function escapeHTML(str) {
     }, 30000);
 
     loadNotes();
-    loadCompanyIdentifiers();
 
     // Render the initial empty state from the template
     document.getElementById('device-list').appendChild(renderEmptyState());
