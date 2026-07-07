@@ -77,10 +77,13 @@ def on_advertisement(device, adv):
 # ---- WebSocket server ------------------------------------------------------
 
 async def process_request(connection, request):
-    """Handle plain HTTP requests that arrive on the WebSocket port."""
-    if request.method == "OPTIONS":
-        return _http_response(204, "No Content")
+    """Handle plain HTTP GET requests that arrive on the WebSocket port.
 
+    Note: the websockets handshake parser only accepts the GET method (any
+    other method raises a parse error before this callback runs), so no
+    method check is needed or possible here — only the Upgrade header
+    distinguishes a WebSocket handshake from a plain HTTP GET.
+    """
     if not request.headers.get("Upgrade"):
         # Plain HTTP GET — return device list for backward compatibility
         with lock:
