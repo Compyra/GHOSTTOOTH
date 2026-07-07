@@ -68,7 +68,6 @@ const SURVEILLANCE_NAME_PATTERNS = [
     /oppo.?air.?glass/i,
     /envision.?glass/i,
     /\bora\b.*glass/i,        // Ora-2 smart glasses
-    /\bplaud\b/i,             // Plaud Note / NotePin AI voice recorders
 ];
 
 /** Regex patterns that match known tracker device names. */
@@ -267,6 +266,15 @@ function classifyAdvertisement(event) {
                 };
             }
         }
+        // Curated real-world findings (media/known-devices.js) that generic
+        // MFR-ID or built-in name-pattern rules above don't catch.
+        if (typeof KNOWN_DEVICE_NAME_PATTERNS !== 'undefined') {
+            for (const entry of KNOWN_DEVICE_NAME_PATTERNS) {
+                if (entry.pattern.test(name)) {
+                    return { type: entry.type, reason: entry.reason };
+                }
+            }
+        }
     }
 
     // 3. Check service UUIDs
@@ -459,11 +467,37 @@ function computeBundles() {
     return [...passthrough, ...merged];
 }
 
-/** Group key (manufacturer) for a device in the grouped view. */
+/**
+ * Group key for a device in the grouped view. Falls back, in order, to:
+ * (1) the first manufacturer name, (2) a resolvable service-UUID vendor
+ * name (e.g. Nest, Tile — via serviceUuidName()), (3) the literal
+ * 'NO MANUFACTURER DATA' bucket only when neither is available. Without
+ * this fallback, devices that only advertise a recognizable service UUID
+ * (no manufacturer data) were all dumped into one giant generic bucket.
+ */
 function groupKeyFor(d) {
-    return d.manufacturers.length > 0
-        ? `${d.manufacturers[0].id} — ${d.manufacturers[0].name}`
-        : 'NO MANUFACTURER DATA';
+    if (d.manufacturers.length > 0) {
+        return `${d.manufacturers[0].id} — ${d.manufacturers[0].name}`;
+    }
+    for (const uuid of d.uuids) {
+        const vendor = serviceUuidName(uuid);
+        if (vendor) return `SVC: ${vendor}`;
+    }
+    return 'NO MANUFACTURER DATA';
+}
+
+/**
+ * Sort key for a manufacturer group: worst-case (highest) severity among its
+ * devices first, then a secondary value depending on the active sortMode —
+ * strongest signal for 'proximity', most recently seen for 'lastseen' and
+ * 'severity' (used as a tie-breaker), or the group key text for 'name'.
+ */
+function groupSortValue(items) {
+    const severity = Math.max(...items.map(d => SEVERITY_RANK[d.classification.type] ?? 0));
+    const secondary = sortMode === 'proximity'
+        ? Math.max(...items.map(d => d.rssi ?? -999))
+        : Math.max(...items.map(d => d.lastSeen));
+    return { severity, secondary };
 }
 
 /**
@@ -502,7 +536,14 @@ function renderDeviceList() {
             if (!groups.has(key)) groups.set(key, []);
             groups.get(key).push(d);
         }
-        for (const key of [...groups.keys()].sort()) {
+        const sortedKeys = [...groups.keys()].sort((keyA, keyB) => {
+            const a = groupSortValue(groups.get(keyA));
+            const b = groupSortValue(groups.get(keyB));
+            if (b.severity !== a.severity) return b.severity - a.severity;
+            if (sortMode === 'name') return keyA.localeCompare(keyB, undefined, { sensitivity: 'base' });
+            return b.secondary - a.secondary;
+        });
+        for (const key of sortedKeys) {
             const items = groups.get(key);
             const collapsed = collapsedGroups.has(key);
             const header = document.createElement('button');
@@ -848,6 +889,93 @@ function bindViewToggle(buttonId, apply) {
         btn.setAttribute('aria-pressed', String(active));
         renderDeviceList();
     });
+}
+
+// ================================================================
+// CSV Export
+// ================================================================
+
+/**
+ * Quote/escape a single CSV field. Prefixes a leading `'` on values starting
+ * with =, +, - or @ to prevent CSV/Excel formula injection — device names
+ * and notes can contain attacker-controlled BLE broadcast data, so this
+ * guards against a malicious "device name" executing as a spreadsheet
+ * formula when the export is opened later.
+ */
+function csvField(value) {
+    let s = value == null ? '' : String(value);
+    if (/^[=+\-@]/.test(s)) s = `'${s}`;
+    return `"${s.replace(/"/g, '""')}"`;
+}
+
+/** Build a CSV file from rows (array of arrays) and trigger a download. */
+function downloadCsv(filename, rows) {
+    const csv = rows.map(row => row.map(csvField).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+/** Export a per-manufacturer/group summary (counts by classification) as CSV. */
+function exportMfrSummaryCsv() {
+    if (devices.size === 0) {
+        showNotice('warn', 'No devices to export yet.');
+        return;
+    }
+    const groups = new Map();
+    for (const d of devices.values()) {
+        const key = groupKeyFor(d);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(d);
+    }
+    const rows = [['Manufacturer / Group', 'Total', 'Surveillance', 'Trackers', 'Normal']];
+    for (const [key, items] of groups) {
+        rows.push([
+            key,
+            items.length,
+            items.filter(d => d.classification.type === 'surveillance').length,
+            items.filter(d => d.classification.type === 'tracker').length,
+            items.filter(d => d.classification.type === 'normal').length,
+        ]);
+    }
+    downloadCsv(`ghosttooth-mfr-summary-${Date.now()}.csv`, rows);
+}
+
+/** Export the full device list (one row per device, all known fields) as CSV. */
+function exportFullCsv() {
+    if (devices.size === 0) {
+        showNotice('warn', 'No devices to export yet.');
+        return;
+    }
+    const rows = [[
+        'ID', 'Name', 'Classification', 'Reason', 'Manufacturer IDs', 'Manufacturer Names',
+        'Service UUIDs', 'RSSI (dBm)', 'Est. Distance (m)', 'TX Power', 'First Seen', 'Last Seen', 'Note',
+    ]];
+    for (const d of devices.values()) {
+        const dist = estimateDistance(d.rssi, d.txPower);
+        rows.push([
+            d.id,
+            d.name || '',
+            d.classification.type,
+            d.classification.reason || '',
+            d.manufacturers.map(m => m.id).join('; '),
+            d.manufacturers.map(m => m.name).join('; '),
+            d.uuids.join('; '),
+            d.rssi ?? '',
+            dist != null ? dist.toFixed(1) : '',
+            d.txPower ?? '',
+            new Date(d.firstSeen).toISOString(),
+            new Date(d.lastSeen).toISOString(),
+            deviceNotes[d.id] || '',
+        ]);
+    }
+    downloadCsv(`ghosttooth-full-export-${Date.now()}.csv`, rows);
 }
 
 // ================================================================
@@ -1337,6 +1465,8 @@ function escapeHTML(str) {
     document.getElementById('btn-stop').addEventListener('click', stopScan);
     document.getElementById('btn-add').addEventListener('click', addDevice);
     document.getElementById('btn-clear').addEventListener('click', clearDevices);
+    document.getElementById('btn-export-mfr').addEventListener('click', exportMfrSummaryCsv);
+    document.getElementById('btn-export-full').addEventListener('click', exportFullCsv);
     document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
         btn.addEventListener('click', () => setFilter(btn.dataset.filter));
     });

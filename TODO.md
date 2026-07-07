@@ -33,7 +33,6 @@ See ![alt text](image.png)
 In case these are unknown devices, we will create a new .js file with devices we have found.
 In case these are already known, fix the code so these are shown correctly.
 
-5) incase the Add Device buttons seems useless, remove the button.
 
 ---
 
@@ -133,29 +132,24 @@ Steps:
       confirm the grouped view now shows a small, correctly labeled group (e.g. `SVC:
       Nest Labs Inc.`) instead of them disappearing into the generic bucket.
 
-### 5) Remove the "+ ADD DEVICE" button
-
-Steps:
-- [ ] Confirm with the user this is really unused before deleting (product decision,
-      not just a technical one) — it's currently the only way to add a single device
-      via the standard Web Bluetooth picker in browsers without bridge support.
-- [ ] If confirmed, remove from [index.html](index.html): the `#btn-add` button in the
-      Controls block, the "Or use [ + ADD DEVICE ]…" line in the empty-state template,
-      and the "Single device mode (+ ADD DEVICE)" paragraph under "# SCAN MODES & REQUIREMENTS".
-- [ ] In [media/script.js](media/script.js), remove `addDevice()`, its `btn-add`
-      listener, and — only if nothing else uses them — `watchedDevices` /
-      `stopWatchingDevices()` (currently only populated/consumed by `addDevice()`'s
-      `watchAdvertisements()` path; double-check before deleting).
-- [ ] Test: full scan flow still works via the bridge and/or `requestLEScan`, no dead
-      references to `btn-add` remain (`grep` for `btn-add`, `addDevice`, `watchedDevices`).
-
 
 
 # TODO in version 3
 # Do not do the tasks underneath yet
 
+### 1) Create seperate category for gaming or other work related devices 
+These could fall under surveillance devices, tracking devices or normal devices.
+Some of these are similar to the Quest or Bluetooth speakers.
+Create a seperate color for this category.
+
+### 2) Extra information from devices found
 When finding devices such as: "0000180f-0000-1000-8000-00805f9b34fb (Battery Service)"
 We also want to collect the battery information when available.
 
 Potentially we can do the following too:
 0000180a-0000-1000-8000-00805f9b34fb (Device Information)
+
+### 3) Add subcatogories.
+Perhaps add these to the side of the screen when the screen width is enough.
+These should show "Cars", "Phones", "Car chargers", "shavers", ... when these devices are recognized.
+See the ./test.html file for example devices.
