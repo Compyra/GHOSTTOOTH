@@ -1,0 +1,589 @@
+/* ============================================================
+   BT Scanner - Surveillance & Tracker Detector
+   Terminal theme matching lebon.info
+   ============================================================ */
+
+:root {
+    --bg:              #181c1b;
+    --bg-section:      #1e2320;
+    --green:           #00ff90;
+    --green-dim:       #00c46a;
+    --amber:           #ffe066;
+    --red:             #ff4444;
+    --red-dim:         #cc2222;
+    --orange:          #ff9a00;
+    --orange-dim:      #cc7700;
+    --gray:            #222826;
+    --border:          #00ff90;
+    --text:            #e0e0e0;
+    --text-dim:        #8a9a8e;
+    --card-normal:     #1e2320;
+    --card-surv:       #2a1010;
+    --card-tracker:    #201810;
+    --card-border-n:   #2e3a30;
+    --card-border-s:   #662222;
+    --card-border-t:   #664400;
+}
+
+/* ---- Reset & Base ---- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); border-left: 1px solid var(--green); }
+::-webkit-scrollbar-thumb { background: var(--gray); border: 1px solid var(--green); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #2a2f2d; }
+* { scrollbar-width: thin; scrollbar-color: var(--gray) var(--bg); }
+
+body.terminal-bg {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'Consolas', 'Menlo', 'Monaco', monospace;
+    font-size: 0.95rem;
+    min-height: 100vh;
+    padding: 0 0 40px;
+}
+
+a { color: var(--green); text-decoration: none; }
+a:hover { color: var(--amber); text-decoration: underline; }
+code { background: var(--gray); padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: var(--amber); }
+strong { color: var(--green); font-weight: 600; }
+small { font-size: max(0.82em, 0.72rem); }
+
+/* ---- Terminal Window ---- */
+.terminal-window {
+    max-width: 1100px;
+    margin: 30px auto;
+    background: var(--gray);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 0 32px #000c, 0 0 8px #00ff9022;
+    overflow: clip; /* clips the rounded corners without breaking position: sticky */
+}
+
+/* ---- Terminal Header ---- */
+.terminal-header {
+    background: #111612;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.back-link {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    transition: color 0.15s;
+}
+.back-link:hover { color: var(--amber); text-decoration: none; }
+
+.prompt-title {
+    color: var(--green);
+    font-weight: bold;
+    font-size: 1rem;
+    flex: 1;
+}
+
+.prompt-blink {
+    color: var(--green);
+    animation: blink 1s step-start infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---- Terminal Body ---- */
+.terminal-body {
+    padding: 20px 24px 28px;
+}
+
+/* ---- Tool Title ---- */
+.tool-title {
+    font-size: 1.15rem;
+    font-weight: bold;
+    color: var(--green);
+    margin-bottom: 18px;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid #2e3a30;
+    padding-bottom: 12px;
+}
+.title-prefix { color: var(--text-dim); }
+.title-suffix { color: var(--text-dim); font-weight: normal; }
+
+.tagline {
+    margin: -10px 0 18px;
+    line-height: 1.6;
+}
+.tagline strong { color: var(--green-dim); }
+
+/* ---- Status Panel (sticky on desktop) ---- */
+@media (min-width: 768px) {
+    .status-panel {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--gray);
+        margin: 0 -24px;
+        padding: 8px 24px 0;
+        border-bottom: 1px solid #2e3a30;
+    }
+}
+
+/* ---- Status Bar ---- */
+.status-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    background: #111612;
+    border: 1px solid #2e3a30;
+    border-radius: 4px;
+    padding: 10px 14px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 16px;
+    border-right: 1px solid #2e3a30;
+}
+.status-item:last-child { border-right: none; }
+
+.status-label {
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+}
+
+.status-value {
+    color: var(--green);
+    font-weight: bold;
+    font-size: 0.95rem;
+    transition: color 0.3s;
+}
+.status-value.scanning { color: var(--amber); animation: pulse 1.5s ease-in-out infinite; }
+.status-value.error { color: var(--red); }
+.status-value.threat { color: var(--red); }
+.status-value.threat.active { animation: pulse-red 1s ease-in-out infinite; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes pulse-red { 0%, 100% { color: var(--red); } 50% { color: var(--red-dim); } }
+
+/* ---- Controls ---- */
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.terminal-btn {
+    background: transparent;
+    border: 1px solid var(--text-dim);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 0.88rem;
+    padding: 7px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: all 0.15s;
+}
+.terminal-btn:hover:not(:disabled) { border-color: var(--green); color: var(--green); background: #00ff9010; }
+.terminal-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.terminal-btn.primary { border-color: var(--green); color: var(--green); background: #00ff9012; }
+.terminal-btn.primary:hover:not(:disabled) { background: #00ff9025; box-shadow: 0 0 8px #00ff9040; }
+
+.terminal-btn.secondary { border-color: var(--amber); color: var(--amber); }
+.terminal-btn.secondary:hover:not(:disabled) { background: #ffe06615; }
+
+.terminal-btn.danger { border-color: var(--red-dim); color: var(--red-dim); }
+.terminal-btn.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); background: #ff000015; }
+
+/* ---- Filter Bar ---- */
+.filter-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.filter-label {
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    margin-right: 4px;
+}
+
+.filter-btn {
+    background: transparent;
+    border: 1px solid #2e3a30;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 0.8rem;
+    padding: 4px 12px;
+    border-radius: 2px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    transition: all 0.15s;
+}
+.filter-btn:hover { border-color: var(--green); color: var(--green); }
+.filter-btn.active { border-color: var(--green); color: var(--green); background: #00ff9015; }
+
+/* ---- Search / Signal Inputs ---- */
+.terminal-input,
+.terminal-select {
+    background: #111612;
+    border: 1px solid #2e3a30;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.82rem;
+    padding: 4px 8px;
+    border-radius: 2px;
+}
+.terminal-input { flex: 1 1 140px; min-width: 120px; }
+.terminal-input::placeholder { color: var(--text-dim); opacity: 0.7; }
+.terminal-input:focus-visible,
+.terminal-select:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 1px;
+    border-color: var(--green);
+}
+.terminal-select option { background: #111612; color: var(--text); }
+
+/* ---- Group Headers ---- */
+.group-header {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed #2e3a30;
+    color: var(--amber);
+    font-family: inherit;
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-align: left;
+    padding: 10px 2px 4px;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+.group-header:hover { color: var(--green); }
+.group-header:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+
+/* ---- Filter Statistics Row ---- */
+.status-bar-filters { margin-top: -10px; }
+.status-bar-filters .status-value { color: var(--green-dim); }
+
+/* ---- Card Action Buttons ---- */
+.device-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.icon-btn {
+    background: transparent;
+    border: 1px solid #2e3a30;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 0.72rem;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    line-height: 1;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+.icon-btn:hover { border-color: var(--green); color: var(--green); }
+.icon-btn:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+
+/* ---- Device Notes ---- */
+.note-row .note-text { color: var(--amber); font-style: italic; }
+
+.uuid-name { color: var(--green-dim); }
+
+.note-editor { align-items: center; }
+.note-editor .note-input {
+    flex: 1 1 160px;
+    min-width: 120px;
+    font-size: 0.8rem;
+    padding: 3px 6px;
+}
+
+/* ---- Alert Banner ---- */
+.alert-banner {
+    background: #3a0000;
+    border: 1px solid var(--red);
+    color: var(--red);
+    border-radius: 4px;
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    animation: alert-flash 0.5s ease-in-out 3;
+}
+@keyframes alert-flash { 0%, 100% { background: #3a0000; } 50% { background: #550000; } }
+
+.alert-icon { font-size: 1.2em; }
+
+/* ---- Notice Box ---- */
+.notice-box {
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+.notice-box.info-info    { background: #0a1a10; border: 1px solid var(--green-dim); color: var(--green); }
+.notice-box.info-warn    { background: #1a1400; border: 1px solid var(--amber); color: var(--amber); }
+.notice-box.info-error   { background: #1a0000; border: 1px solid var(--red-dim); color: var(--red); }
+
+/* ---- Device List ---- */
+.device-list {
+    min-height: 120px;
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 10px;
+    align-items: start;
+}
+
+.device-list-empty,
+.group-header {
+    grid-column: 1 / -1;
+}
+
+.device-list-empty {
+    border: 1px dashed #2e3a30;
+    border-radius: 4px;
+    padding: 24px 20px;
+    text-align: center;
+    line-height: 1.9;
+}
+
+/* ---- Device Cards ---- */
+.device-card {
+    border-radius: 5px;
+    padding: 12px 16px;
+    border: 1px solid;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.device-normal {
+    background: var(--card-normal);
+    border-color: var(--card-border-n);
+}
+.device-normal:hover { border-color: var(--green-dim); }
+
+.device-surveillance {
+    background: var(--card-surv);
+    border-color: var(--card-border-s);
+    box-shadow: 0 0 12px #ff000020, inset 0 0 30px #ff000008;
+}
+.device-surveillance:hover { border-color: var(--red); }
+
+.device-tracker {
+    background: var(--card-tracker);
+    border-color: var(--card-border-t);
+    box-shadow: 0 0 12px #ff9a0015, inset 0 0 30px #ff9a0008;
+}
+.device-tracker:hover { border-color: var(--orange); }
+
+/* ---- Card Header ---- */
+.device-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.device-name {
+    font-weight: bold;
+    font-size: 1rem;
+    color: var(--text);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.device-surveillance .device-name { color: #ff8888; }
+.device-tracker .device-name { color: #ffcc66; }
+
+/* ---- Badges ---- */
+.badge {
+    font-size: 0.72rem;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.badge-surveillance { background: #550000; border: 1px solid var(--red); color: var(--red); }
+.badge-tracker      { background: #332200; border: 1px solid var(--orange); color: var(--orange); }
+.badge-normal       { background: #0a1a10; border: 1px solid var(--green-dim); color: var(--green-dim); }
+
+/* ---- Card Details ---- */
+.device-details {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.device-detail {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.84rem;
+    flex-wrap: wrap;
+}
+
+.detail-label {
+    color: var(--text-dim);
+    font-size: 0.74rem;
+    letter-spacing: 0.07em;
+    min-width: 60px;
+    flex-shrink: 0;
+}
+
+.detail-value { color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.detail-value.manufacturer { color: var(--green-dim); }
+
+.alert-reason .detail-value {
+    color: var(--amber);
+    font-style: italic;
+}
+
+/* ---- RSSI Signal Bars ---- */
+.rssi-bars {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 14px;
+    vertical-align: middle;
+    margin-left: 6px;
+}
+
+.rssi-bar {
+    width: 4px;
+    background: #2e3a30;
+    border-radius: 1px;
+    transition: background 0.3s;
+}
+.rssi-bar:nth-child(1) { height: 4px; }
+.rssi-bar:nth-child(2) { height: 6px; }
+.rssi-bar:nth-child(3) { height: 8px; }
+.rssi-bar:nth-child(4) { height: 11px; }
+.rssi-bar:nth-child(5) { height: 14px; }
+
+.rssi-bar.active                          { background: var(--green); }
+.device-surveillance .rssi-bar.active     { background: var(--red); }
+.device-tracker .rssi-bar.active          { background: var(--orange); }
+
+/* ---- Legend ---- */
+.legend-section {
+    margin-top: 24px;
+    margin-bottom: 20px;
+    border: 1px solid #2e3a30;
+    border-radius: 4px;
+    padding: 14px 16px;
+    background: #111612;
+}
+
+.section-label {
+    display: block;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    margin-bottom: 10px;
+}
+
+.legend-items {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.legend-item .badge { margin-top: 2px; }
+
+/* ---- Info Sections ---- */
+.info-section {
+    margin-bottom: 18px;
+    border-left: 2px solid #2e3a30;
+    padding-left: 14px;
+}
+
+details.info-section > summary {
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+details.info-section > summary::-webkit-details-marker { display: none; }
+details.info-section > summary::before {
+    content: '▸ ';
+    color: var(--text-dim);
+}
+details.info-section[open] > summary::before { content: '▾ '; }
+details.info-section > summary:hover .section-label { color: var(--green); }
+details.info-section > summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+details.info-section[open] > summary { margin-bottom: 8px; }
+details.info-section > summary .section-label {
+    display: inline;
+    margin-bottom: 0;
+    transition: color 0.15s;
+}
+
+.info-section .section-label { margin-bottom: 8px; }
+
+.info-section p {
+    font-size: 0.86rem;
+    line-height: 1.75;
+    margin-bottom: 8px;
+}
+.info-section p:last-child { margin-bottom: 0; }
+
+.terminal-link { color: var(--green); }
+.terminal-link:hover { color: var(--amber); }
+
+/* ---- Utilities ---- */
+.dim   { color: var(--text-dim); }
+.small { font-size: max(0.82em, 0.72rem); }
+
+.hidden { display: none !important; }
+
+/* ---- Reduced Motion ---- */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 600px) {
+    .terminal-window { margin: 0; border-radius: 0; border-left: none; border-right: none; }
+    .terminal-body { padding: 14px 14px 24px; }
+    .status-bar { gap: 6px; }
+    .status-item { padding-right: 10px; }
+    .controls { gap: 6px; }
+    .terminal-btn { font-size: 0.82rem; padding: 6px 10px; }
+    .device-name { font-size: 0.92rem; }
+    .device-list { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GHOSTTOOTH // Surveillance & Tracker Detector</title>
+    <meta name="description" content="GHOSTTOOTH — Gathering Hidden Objects through Signal Tracking and Telemetry Observation of Operational Tracker Hardware. Scan for nearby Bluetooth devices and identify surveillance devices and trackers.">
+    <meta name="theme-color" content="#181c1b">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23181c1b'/%3E%3Ctext x='8' y='12.5' font-size='11' text-anchor='middle' fill='%2300ff90' font-family='monospace'%3EG%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="media/style.css">
+</head>
+<body class="terminal-bg">
+    <div class="terminal-window">
+
+        <!-- Header -->
+        <header class="terminal-header">
+            <a href="../../" class="back-link">← lebon.info</a>
+            <span class="prompt-title">ghosttooth:~$</span>
+            <span class="prompt-blink" aria-hidden="true">█</span>
+        </header>
+
+        <main class="terminal-body">
+
+            <!-- Title -->
+            <h1 class="tool-title">
+                <span class="title-prefix">// </span>GHOSTTOOTH
+                <span class="title-suffix"> v2.0</span>
+            </h1>
+            <p class="tagline dim small">
+                <strong>G</strong>athering <strong>H</strong>idden <strong>O</strong>bjects through <strong>S</strong>ignal <strong>T</strong>racking and <strong>T</strong>elemetry <strong>O</strong>bservation of <strong>O</strong>perational <strong>T</strong>racker <strong>H</strong>ardware — tracking trackers with Bluetooth.
+            </p>
+
+            <!-- Status Panel (sticky on desktop) -->
+            <div class="status-panel">
+                <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-label">STATUS</span>
+                    <span id="status" class="status-value" aria-live="polite">IDLE</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">DEVICES</span>
+                    <span id="device-count" class="status-value">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">SURVEILLANCE</span>
+                    <span id="surveillance-count" class="status-value">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">TRACKERS</span>
+                    <span id="tracker-count" class="status-value">0</span>
+                </div>
+            </div>
+
+            <!-- Filter Statistics -->
+            <div class="status-bar status-bar-filters">
+                <div class="status-item">
+                    <span class="status-label">MFR</span>
+                    <span id="mfr-count" class="status-value">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">FILTERED</span>
+                    <span id="filtered-count" class="status-value">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">FILT TRACKERS</span>
+                    <span id="filtered-tracker-count" class="status-value">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">FILT SURVEILLANCE</span>
+                    <span id="filtered-surv-count" class="status-value">0</span>
+                </div>
+            </div>
+
+                <!-- Alert Banner -->
+                <div id="alert-banner" class="alert-banner hidden" role="alert">
+                    <span class="alert-icon" aria-hidden="true">⚠</span>
+                    <span id="alert-text">SURVEILLANCE DEVICE DETECTED NEARBY</span>
+                </div>
+            </div><!-- /status-panel -->
+
+            <!-- Controls -->
+            <div class="controls">
+                <button id="btn-scan" class="terminal-btn primary" type="button">[ START SCAN ]</button>
+                <button id="btn-stop" class="terminal-btn" type="button" disabled>[ STOP SCAN ]</button>
+                <button id="btn-add" class="terminal-btn secondary" type="button" title="Manually add one device via browser picker">[ + ADD DEVICE ]</button>
+                <button id="btn-clear" class="terminal-btn danger" type="button">[ CLEAR ]</button>
+            </div>
+
+            <!-- Filters -->
+            <div class="filter-bar" role="group" aria-label="Filter device list">
+                <span class="filter-label" aria-hidden="true">FILTER:</span>
+                <button class="filter-btn active" type="button" data-filter="all" aria-pressed="true">ALL</button>
+                <button class="filter-btn" type="button" data-filter="surveillance" aria-pressed="false">SURVEILLANCE</button>
+                <button class="filter-btn" type="button" data-filter="tracker" aria-pressed="false">TRACKERS</button>
+                <button class="filter-btn" type="button" data-filter="normal" aria-pressed="false">NORMAL</button>
+            </div>
+
+            <!-- Search / signal / sort -->
+            <div class="filter-bar" role="group" aria-label="Search, signal filter and sorting">
+                <label class="filter-label" for="filter-text">SEARCH:</label>
+                <input id="filter-text" class="terminal-input" type="search" placeholder="name / manufacturer / id / note" autocomplete="off" spellcheck="false">
+                <label class="filter-label" for="filter-rssi">SIGNAL:</label>
+                <select id="filter-rssi" class="terminal-select">
+                    <option value="">ALL</option>
+                    <option value="-50">&ge; -50 dBm (very close)</option>
+                    <option value="-70">&ge; -70 dBm (near)</option>
+                    <option value="-85">&ge; -85 dBm (medium)</option>
+                </select>
+                <label class="filter-label" for="sort-mode">SORT:</label>
+                <select id="sort-mode" class="terminal-select">
+                    <option value="lastseen">LAST SEEN</option>
+                    <option value="proximity">PROXIMITY</option>
+                    <option value="severity">SEVERITY</option>
+                    <option value="name">NAME</option>
+                </select>
+            </div>
+
+            <!-- View options -->
+            <div class="filter-bar" role="group" aria-label="View options">
+                <span class="filter-label" aria-hidden="true">VIEW:</span>
+                <button id="btn-group" class="filter-btn" type="button" aria-pressed="false">GROUP BY MFR</button>
+                <button id="btn-bundle" class="filter-btn" type="button" aria-pressed="false" title="Merge nameless devices that look like one physical device rotating its MAC address (same manufacturer, back-to-back appearance, similar signal). Heuristic — results are guesses.">BUNDLE ROTATING MACS</button>
+                <label class="filter-label" for="stale-mode">STALE:</label>
+                <select id="stale-mode" class="terminal-select" title="Hide devices that have not been seen recently">
+                    <option value="">KEEP ALL</option>
+                    <option value="60000">HIDE &gt; 1 MIN</option>
+                    <option value="600000">HIDE &gt; 10 MIN</option>
+                </select>
+                <button id="btn-collapse-all" class="filter-btn" type="button" title="Collapse or expand all manufacturer groups (enables grouping)">COLLAPSE ALL</button>
+            </div>
+
+            <!-- Notice Box -->
+            <div id="notice-box" class="notice-box hidden" aria-live="polite"></div>
+
+            <!-- Device List -->
+            <div id="device-list" class="device-list"></div>
+
+            <!-- Empty-state template (rendered by script.js) -->
+            <template id="tpl-empty">
+                <div class="device-list-empty">
+                    <span class="dim">No devices detected.</span><br>
+                    <span class="dim small">Click <strong>[ START SCAN ]</strong> to begin scanning — on Windows, first start the local bridge (see <strong># SCAN MODES</strong> below).<br>
+                    Or use <strong>[ + ADD DEVICE ]</strong> to manually select a specific device.</span>
+                </div>
+            </template>
+
+            <!-- Legend -->
+            <div class="legend-section">
+                <span class="section-label"># LEGEND</span>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <span class="badge badge-surveillance">SURVEILLANCE</span>
+                        <span class="dim">Smart glasses &amp; covert recording devices<br>
+                        <small>(Meta Ray-Ban, Snap Spectacles, Amazon Echo Frames, Vuzix, Epson Moverio…)</small></span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="badge badge-tracker">TRACKER</span>
+                        <span class="dim">Location trackers<br>
+                        <small>(Apple AirTag, Tile, Samsung SmartTag, Chipolo…)</small></span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="badge badge-normal">DEVICE</span>
+                        <span class="dim">Regular Bluetooth device</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- How it works -->
+            <details class="info-section">
+                <summary><span class="section-label"># HOW IT WORKS</span></summary>
+                <p class="dim">
+                    Detection uses <strong>Bluetooth manufacturer company IDs</strong> from the
+                    <a href="https://www.bluetooth.com/specifications/assigned-numbers/" target="_blank" rel="noopener noreferrer" class="terminal-link">Bluetooth SIG assigned numbers</a>
+                    embedded in BLE advertisement packets, combined with device name pattern matching.
+                    Manufacturer names are resolved against the full SIG registry (~4,300 companies) loaded from
+                    <code>company_identifiers.yaml</code>.<br><br>
+
+                    Surveillance devices are identified by manufacturer IDs for Meta, Luxottica (Ray-Ban), Snap Inc., Amazon,
+                    and others known to produce smart glasses or covert cameras. Trackers are identified by
+                    Apple FindMy, Tile, Samsung, and Chipolo manufacturer IDs or known service UUIDs.<br><br>
+
+                    <strong>BUNDLE ROTATING MACS</strong> merges nameless devices that share a manufacturer ID and
+                    reappear at a similar signal level right after another vanishes — the signature of privacy
+                    MAC rotation (phones, AirTags). It is a heuristic: treat bundles as educated guesses.
+                </p>
+                <p class="dim small">
+                    ⚠ <strong>False positives are expected.</strong> A Meta company ID may indicate a Quest VR headset
+                    rather than Ray-Ban smart glasses. An Apple company ID may indicate an iPhone. Always use visual
+                    confirmation before drawing conclusions.<br><br>
+                    ⚠ <strong>Do not harass anyone</strong> based on detections from this tool.
+                </p>
+            </details>
+
+            <!-- Requirements -->
+            <details class="info-section">
+                <summary><span class="section-label"># SCAN MODES &amp; REQUIREMENTS</span></summary>
+                <p class="dim">
+                    <strong>Why a local bridge?</strong> A webpage cannot access the Bluetooth radio directly —
+                    browsers only expose the experimental Web Bluetooth API, and on <strong>Windows</strong> its
+                    passive scanning never starts radio discovery (a known Chromium limitation, in Chrome, Edge
+                    and Brave alike). The bridge is a small Python script that runs on your own machine, performs
+                    the native BLE scan, and feeds live results to this page over <code>127.0.0.1:8437</code>.
+                    Nothing leaves your computer: the bridge only listens on localhost and this page reads from it locally.
+                </p>
+                <p class="dim">
+                    <strong>Local bridge mode</strong> (recommended, required on Windows):<br>
+                    1. <a href="bt-bridge.py" download class="terminal-link">⬇ Download bt-bridge.py</a><br>
+                    2. Install the scanner library (once): <code>pip install bleak</code><br>
+                    3. Start the bridge: <code>python bt-bridge.py</code><br>
+                    4. Click <strong>[ START SCAN ]</strong> — the page connects automatically and shows every
+                    advertising BLE device your radio can see. Stop the bridge with <code>Ctrl+C</code> when done.<br>
+                    Requires Python 3.9+ (<a href="https://www.python.org/downloads/" target="_blank" rel="noopener noreferrer" class="terminal-link">python.org</a>).<br><br>
+                    <strong>Full scan mode</strong> (browser-only, Android/ChromeOS): Requires Chrome or Edge with the experimental Web Bluetooth scanning flag:<br>
+                    <code>chrome://flags/#enable-experimental-web-platform-features</code><br>
+                    ⚠ On <strong>Windows</strong>, Chromium's Web Bluetooth scanning does not start radio discovery — use the local bridge instead.<br><br>
+                    <strong>Single device mode</strong> (+ ADD DEVICE): Works in any Chromium browser with Web Bluetooth support over HTTPS.<br><br>
+                    <strong>Does not work in:</strong> Firefox, Safari, or HTTP (non-secure) connections (bridge mode excepted).
+                </p>
+                <p class="dim small">
+                    ⚠ <strong>Seeing no devices?</strong> Only BLE devices that are actively <em>advertising</em> are visible.
+                    Classic Bluetooth devices (many speakers, mice, older headphones) never advertise over BLE, and devices
+                    already connected to a phone or laptop usually stop advertising. Trackers like AirTags advertise
+                    roughly every 2 seconds only when away from their owner. To verify your adapter sees packets at all,
+                    open <code>chrome://bluetooth-internals</code> → Adapter → Start Discovery.
+                </p>
+            </details>
+
+        </main><!-- /terminal-body -->
+    </div><!-- /terminal-window -->
+
+    <script src="media/long_company_identifiers.js"></script>
+    <script src="media/script.js"></script>
+</body>
+</html>
